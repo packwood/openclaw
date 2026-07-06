@@ -2,10 +2,10 @@
 import { randomUUID } from "node:crypto";
 import type {
   ConnectParams,
+  ErrorShape,
   EventFrame,
   HelloOk,
   RequestFrame,
-  ResponseFrame,
 } from "@openclaw/gateway-protocol";
 import {
   GATEWAY_CLIENT_MODES,
@@ -21,6 +21,11 @@ import {
   readPairingConnectErrorDetails,
   type ConnectErrorRecoveryAdvice,
 } from "@openclaw/gateway-protocol/connect-error-details";
+import {
+  isGatewayEventFrame,
+  isGatewayResponseFrame,
+  readGatewayRequestFrameValidationError,
+} from "@openclaw/gateway-protocol/frame-guards";
 import { resolveGatewayStartupRetryAfterMs } from "@openclaw/gateway-protocol/startup-unavailable";
 import { MIN_CLIENT_PROTOCOL_VERSION, PROTOCOL_VERSION } from "@openclaw/gateway-protocol/version";
 import ipaddr from "ipaddr.js";
@@ -76,63 +81,6 @@ function normalizeOptionalString(value: unknown): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed || undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
-}
-
-function isGatewayClientErrorShape(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false;
-  }
-  if (!isNonEmptyString(value.code) || !isNonEmptyString(value.message)) {
-    return false;
-  }
-  if (value.retryable !== undefined && typeof value.retryable !== "boolean") {
-    return false;
-  }
-  if (value.retryAfterMs !== undefined && !isNonNegativeInteger(value.retryAfterMs)) {
-    return false;
-  }
-  return true;
-}
-
-function isGatewayEventFrame(value: unknown): value is EventFrame {
-  if (!isRecord(value) || value.type !== "event" || !isNonEmptyString(value.event)) {
-    return false;
-  }
-  return value.seq === undefined || isNonNegativeInteger(value.seq);
-}
-
-function isGatewayResponseFrame(value: unknown): value is ResponseFrame {
-  if (
-    !isRecord(value) ||
-    value.type !== "res" ||
-    !isNonEmptyString(value.id) ||
-    typeof value.ok !== "boolean"
-  ) {
-    return false;
-  }
-  return value.error === undefined || isGatewayClientErrorShape(value.error);
-}
-
-function validateClientRequestFrame(frame: RequestFrame): string | null {
-  if (!isNonEmptyString(frame.id)) {
-    return "id must be a non-empty string";
-  }
-  if (!isNonEmptyString(frame.method)) {
-    return "method must be a non-empty string";
-  }
-  return null;
 }
 
 function normalizeLowercaseStringOrEmpty(value: unknown): string {
@@ -314,14 +262,6 @@ export type GatewayClientRequestOptions = {
   onAccepted?: (payload: unknown) => void;
 };
 
-type GatewayClientErrorShape = {
-  code?: string;
-  message?: string;
-  details?: unknown;
-  retryable?: boolean;
-  retryAfterMs?: number;
-};
-
 type SelectedConnectAuth = {
   authToken?: string;
   authBootstrapToken?: string;
@@ -376,7 +316,7 @@ export class GatewayClientRequestError extends Error {
   readonly retryable: boolean;
   readonly retryAfterMs?: number;
 
-  constructor(error: GatewayClientErrorShape) {
+  constructor(error: Partial<ErrorShape>) {
     super(formatConnectErrorMessage({ message: error.message, details: error.details }));
     this.name = "GatewayClientRequestError";
     this.gatewayCode = error.code ?? "UNAVAILABLE";
@@ -458,6 +398,13 @@ export type GatewayClientOptions = {
   onReconnectPaused?: (info: GatewayReconnectPausedInfo) => void;
   onClose?: (code: number, reason: string, info?: GatewayClientCloseInfo) => void;
   onGap?: (info: { expected: number; received: number }) => void;
+};
+
+export type GatewayClientConnectionMetadata = {
+  clientName?: GatewayClientName;
+  hasDeviceIdentity: boolean;
+  mode?: GatewayClientMode;
+  preauthHandshakeTimeoutMs?: number;
 };
 
 export const GATEWAY_CLOSE_CODE_HINTS: Readonly<Record<number, string>> = {
@@ -592,6 +539,15 @@ export class GatewayClient {
       typeof opts.requestTimeoutMs === "number" && Number.isFinite(opts.requestTimeoutMs)
         ? resolveSafeTimeoutDelayMs(opts.requestTimeoutMs, { minMs: 0 })
         : 30_000;
+  }
+
+  getConnectionMetadata(): GatewayClientConnectionMetadata {
+    return {
+      clientName: this.opts.clientName,
+      hasDeviceIdentity: Boolean(this.opts.deviceIdentity),
+      mode: this.opts.mode,
+      preauthHandshakeTimeoutMs: this.opts.preauthHandshakeTimeoutMs,
+    };
   }
 
   start() {
@@ -1639,7 +1595,7 @@ export class GatewayClient {
     }
     const id = randomUUID();
     const frame: RequestFrame = { type: "req", id, method, params };
-    const requestFrameError = validateClientRequestFrame(frame);
+    const requestFrameError = readGatewayRequestFrameValidationError(frame);
     if (requestFrameError) {
       throw new Error(`invalid request frame: ${requestFrameError}`);
     }
