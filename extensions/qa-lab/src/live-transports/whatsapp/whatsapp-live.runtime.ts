@@ -72,8 +72,6 @@ type WhatsAppQaScenarioId =
   | "whatsapp-audio-preflight"
   | "whatsapp-broadcast-group-fanout"
   | "whatsapp-canary"
-  | "whatsapp-commands-command"
-  | "whatsapp-context-command"
   | "whatsapp-group-allowlist-block"
   | "whatsapp-group-activation-always"
   | "whatsapp-group-agent-message-action-react"
@@ -86,11 +84,9 @@ type WhatsAppQaScenarioId =
   | "whatsapp-group-reply-to-bot-triggers"
   | "whatsapp-group-reply-to-message"
   | "whatsapp-inbound-reaction-no-trigger"
-  | "whatsapp-help-command"
   | "whatsapp-inbound-image-caption"
   | "whatsapp-inbound-structured-messages"
   | "whatsapp-message-actions"
-  | "whatsapp-native-new-command"
   | "whatsapp-outbound-document-preserves-filename"
   | "whatsapp-outbound-media-matrix"
   | "whatsapp-outbound-poll"
@@ -103,13 +99,9 @@ type WhatsAppQaScenarioId =
   | "whatsapp-reply-to-mode-batched"
   | "whatsapp-restart-resume"
   | "whatsapp-stream-final-message-accounting"
-  | "whatsapp-status-command"
   | "whatsapp-status-reaction-lifecycle"
   | "whatsapp-status-reactions"
   | "whatsapp-top-level-reply-shape"
-  | "whatsapp-tools-compact-command"
-  | "whatsapp-tool-only-usage-footer"
-  | "whatsapp-whoami-command"
   | "whatsapp-approval-exec-native"
   | "whatsapp-approval-plugin-native";
 
@@ -137,8 +129,6 @@ const WHATSAPP_QA_SCENARIO_POSTURES = {
   "whatsapp-audio-preflight": "user-path",
   "whatsapp-broadcast-group-fanout": "user-path",
   "whatsapp-canary": "user-path",
-  "whatsapp-commands-command": "user-path",
-  "whatsapp-context-command": "user-path",
   "whatsapp-group-activation-always": "user-path",
   "whatsapp-group-allowlist-block": "user-path",
   "whatsapp-group-agent-message-action-react": "user-path",
@@ -150,13 +140,11 @@ const WHATSAPP_QA_SCENARIO_POSTURES = {
   "whatsapp-group-pending-history-context": "user-path",
   "whatsapp-group-reply-to-bot-triggers": "user-path",
   "whatsapp-group-reply-to-message": "user-path",
-  "whatsapp-help-command": "user-path",
   "whatsapp-inbound-image-caption": "user-path",
   "whatsapp-inbound-reaction-no-trigger": "user-path",
   "whatsapp-inbound-structured-messages": "user-path",
   "whatsapp-mention-gating": "user-path",
   "whatsapp-message-actions": "direct-gateway",
-  "whatsapp-native-new-command": "user-path",
   "whatsapp-outbound-document-preserves-filename": "direct-gateway",
   "whatsapp-outbound-media-matrix": "direct-gateway",
   "whatsapp-outbound-poll": "direct-gateway",
@@ -167,14 +155,10 @@ const WHATSAPP_QA_SCENARIO_POSTURES = {
   "whatsapp-reply-to-message": "user-path",
   "whatsapp-reply-to-mode-batched": "user-path",
   "whatsapp-restart-resume": "user-path",
-  "whatsapp-status-command": "user-path",
   "whatsapp-status-reaction-lifecycle": "user-path",
   "whatsapp-status-reactions": "user-path",
   "whatsapp-stream-final-message-accounting": "user-path",
-  "whatsapp-tool-only-usage-footer": "user-path",
-  "whatsapp-tools-compact-command": "user-path",
   "whatsapp-top-level-reply-shape": "user-path",
-  "whatsapp-whoami-command": "user-path",
 } satisfies Record<WhatsAppQaScenarioId, WhatsAppQaScenarioPosture>;
 
 type WhatsAppQaMessageSendMode =
@@ -935,120 +919,6 @@ const WHATSAPP_QA_SCENARIOS: WhatsAppQaScenarioDefinition[] = [
         expectReply: true,
         input: `Before the restart, reply with only this exact marker: ${firstToken}`,
         matchText: firstToken,
-        target: "dm",
-      };
-    },
-  },
-  {
-    id: "whatsapp-help-command",
-    standardId: "help-command",
-    title: "WhatsApp help command replies",
-    timeoutMs: 60_000,
-    buildRun: () => ({
-      configMode: "allowlist",
-      expectReply: true,
-      input: "/help",
-      matchText: /OpenClaw|commands|status|\/new/iu,
-      target: "dm",
-    }),
-  },
-  {
-    id: "whatsapp-status-command",
-    title: "WhatsApp status command replies",
-    timeoutMs: 60_000,
-    buildRun: () => ({
-      configMode: "allowlist",
-      expectReply: true,
-      input: "/status",
-      matchText: /OpenClaw|status|session|agent/iu,
-      target: "dm",
-    }),
-  },
-  {
-    id: "whatsapp-commands-command",
-    title: "WhatsApp commands list replies",
-    defaultProviderModes: ["mock-openai"],
-    timeoutMs: 60_000,
-    buildRun: () => ({
-      configMode: "allowlist",
-      expectReply: true,
-      expectedJoinedSutTextIncludes: ["/session", "/verbose"],
-      input: "/commands",
-      matchText: /Commands \(|\/session|\/verbose/iu,
-      settleMs: 4_000,
-      target: "dm",
-    }),
-  },
-  {
-    id: "whatsapp-tools-compact-command",
-    title: "WhatsApp tools compact reply",
-    defaultProviderModes: ["mock-openai"],
-    timeoutMs: 60_000,
-    buildRun: () => ({
-      configMode: "allowlist",
-      expectReply: true,
-      expectedJoinedSutTextIncludes: ["exec", "Use /tools verbose for descriptions"],
-      input: "/tools compact",
-      matchText: /Available tools|exec|Use \/tools verbose for descriptions/iu,
-      settleMs: 4_000,
-      target: "dm",
-    }),
-  },
-  {
-    id: "whatsapp-whoami-command",
-    title: "WhatsApp whoami reply",
-    defaultProviderModes: ["mock-openai"],
-    timeoutMs: 60_000,
-    buildRun: () => ({
-      configMode: "allowlist",
-      expectReply: true,
-      input: "/whoami",
-      matchText: /(?=.*Identity)(?=.*Channel: whatsapp)(?=.*AllowFrom:)/isu,
-      target: "dm",
-    }),
-  },
-  {
-    id: "whatsapp-context-command",
-    title: "WhatsApp context list reply",
-    defaultProviderModes: ["mock-openai"],
-    timeoutMs: 60_000,
-    buildRun: () => ({
-      configMode: "allowlist",
-      expectReply: true,
-      input: "/context list",
-      matchText: /(?=.*Context breakdown)(?=.*Workspace:)(?=.*Tool schemas)/isu,
-      target: "dm",
-    }),
-  },
-  {
-    id: "whatsapp-tool-only-usage-footer",
-    title: "WhatsApp tool-only reply includes usage footer",
-    defaultProviderModes: ["mock-openai"],
-    timeoutMs: 120_000,
-    buildRun: () => {
-      const token = `WHATSAPP_QA_USAGE_FOOTER_${randomUUID().slice(0, 8).toUpperCase()}`;
-      return {
-        afterReply: async (_reply, context) => {
-          const usageStartedAt = new Date();
-          await context.driver.sendText(
-            context.target,
-            `Reply with only this exact marker after usage footer setup: ${token}`,
-          );
-          const usageReply = await context.driver.waitForMessage({
-            observedAfter: usageStartedAt,
-            timeoutMs: 60_000,
-            match: (message) =>
-              message.fromPhoneE164 === context.sutPhoneE164 &&
-              message.text.includes(token) &&
-              message.text.includes("Usage:"),
-          });
-          context.recordObservedMessage(usageReply);
-          return "model reply included visible usage footer";
-        },
-        configMode: "allowlist",
-        expectReply: true,
-        input: "/usage tokens",
-        matchText: /Usage footer: tokens/iu,
         target: "dm",
       };
     },
@@ -2050,19 +1920,6 @@ const WHATSAPP_QA_SCENARIOS: WhatsAppQaScenarioDefinition[] = [
       input: "WhatsApp long final QA check. Use the scripted long final response.",
       matchText: "WHATSAPP-LONG-FINAL-BEGIN",
       settleMs: 4_000,
-      target: "dm",
-    }),
-  },
-  {
-    id: "whatsapp-native-new-command",
-    title: "WhatsApp /new command starts a new session",
-    defaultProviderModes: ["mock-openai"],
-    timeoutMs: 60_000,
-    buildRun: () => ({
-      configMode: "allowlist",
-      expectReply: true,
-      input: "/new",
-      matchText: /new session|session/i,
       target: "dm",
     }),
   },

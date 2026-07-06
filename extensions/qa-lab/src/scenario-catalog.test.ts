@@ -197,6 +197,7 @@ describe("qa scenario catalog", () => {
     expect(scenarios.map((scenario) => scenario.id).toSorted()).toEqual([
       "kitchen-sink-live-openai",
       "subagent-stale-child-links",
+      "telegram-repeated-command-authorization",
     ]);
     expect(
       scenarios

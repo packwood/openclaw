@@ -138,7 +138,15 @@ describe("live transport scenario helpers", () => {
 
     expect(lanes.get("discord")).toEqual(discordTesting.DISCORD_QA_STANDARD_SCENARIO_IDS);
     expect(lanes.get("slack")).toEqual(slackTesting.SLACK_QA_STANDARD_SCENARIO_IDS);
-    expect(lanes.get("telegram")).toEqual(telegramTesting.TELEGRAM_QA_STANDARD_SCENARIO_IDS);
-    expect(lanes.get("whatsapp")).toEqual(whatsAppTesting.WHATSAPP_QA_STANDARD_SCENARIO_IDS);
+    expect(lanes.get("telegram")).toEqual(["canary", "help-command", "mention-gating"]);
+    expect(lanes.get("telegram")).toEqual(
+      expect.arrayContaining(telegramTesting.TELEGRAM_QA_STANDARD_SCENARIO_IDS),
+    );
+    expect(lanes.get("whatsapp")).toEqual(
+      expect.arrayContaining([
+        "help-command",
+        ...whatsAppTesting.WHATSAPP_QA_STANDARD_SCENARIO_IDS,
+      ]),
+    );
   });
 });
