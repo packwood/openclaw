@@ -147,6 +147,9 @@ export const pluginSdkDocMetadata = {
   "inline-image-data-url-runtime": {
     category: "runtime",
   },
+  "qr-terminal-runtime": {
+    category: "runtime",
+  },
   "allow-from": {
     category: "utilities",
   },

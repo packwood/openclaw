@@ -290,6 +290,28 @@ describe("moveSingleAccountChannelSectionToDefaultAccount", () => {
     expect(next.channels?.matrix?.allowBots).toBeUndefined();
   });
 
+  it("moves Signal apiMode into the promoted default account", () => {
+    const next = moveSingleAccountChannelSectionToDefaultAccount({
+      cfg: asConfig({
+        channels: {
+          signal: {
+            account: "+15555550123",
+            httpUrl: "http://127.0.0.1:18080",
+            apiMode: "container",
+          },
+        },
+      }),
+      channelKey: "signal",
+    });
+
+    const channel = channelRecord(next, "signal");
+    const defaultAccount = accountRecord(channel, "default");
+    expect(defaultAccount.account).toBe("+15555550123");
+    expect(defaultAccount.httpUrl).toBe("http://127.0.0.1:18080");
+    expect(defaultAccount.apiMode).toBe("container");
+    expect(next.channels?.signal?.apiMode).toBeUndefined();
+  });
+
   it("promotes legacy Matrix keys into the sole named account when defaultAccount is unset", () => {
     const next = moveSingleAccountChannelSectionToDefaultAccount({
       cfg: asConfig({

@@ -1,6 +1,7 @@
 // Channel setup tests cover setup flow prompts and config output.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { WizardPrompter } from "../wizard/prompts.js";
 import {
   makeCatalogEntry,
   makeChannelSetupEntries,
@@ -105,6 +106,25 @@ function expectExternalCatalogInstallCall(index = 0) {
   expect(input.entry?.id).toBe("external-chat");
   expect(input.entry?.install?.npmSpec).toBe("@vendor/external-chat-plugin");
   expect(input.autoConfirmSingleSource).toBe(true);
+}
+
+type WizardPrompterTestOverrides = Partial<Omit<WizardPrompter, "select" | "multiselect">> & {
+  select?: unknown;
+  multiselect?: unknown;
+};
+
+function makePrompter(overrides: WizardPrompterTestOverrides = {}): WizardPrompter {
+  return {
+    intro: vi.fn(async () => undefined),
+    outro: vi.fn(async () => undefined),
+    note: vi.fn(async () => undefined),
+    select: vi.fn(async () => "__done__") as WizardPrompter["select"],
+    multiselect: vi.fn(async () => []) as WizardPrompter["multiselect"],
+    text: vi.fn(async () => ""),
+    confirm: vi.fn(async () => false),
+    progress: vi.fn(() => ({ update: vi.fn(), stop: vi.fn() })),
+    ...(overrides as Partial<WizardPrompter>),
+  };
 }
 
 const resolveAgentWorkspaceDir = vi.hoisted(() =>
@@ -266,10 +286,10 @@ describe("setupChannels workspace shadow exclusion", () => {
     await setupChannels(
       {} as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => false),
         note: vi.fn(async () => undefined),
-      } as never,
+      }),
     );
 
     const trustedInput = callArg<{ cfg?: unknown; workspaceDir?: string }>(
@@ -300,10 +320,10 @@ describe("setupChannels workspace shadow exclusion", () => {
         },
       } as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => false),
         note: vi.fn(async () => undefined),
-      } as never,
+      }),
     );
 
     const registryInput = callArg<{
@@ -323,11 +343,11 @@ describe("setupChannels workspace shadow exclusion", () => {
     await setupChannels(
       {} as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note: vi.fn(async () => undefined),
         select,
-      } as never,
+      }),
       {
         deferStatusUntilSelection: true,
         skipConfirm: true,
@@ -349,11 +369,11 @@ describe("setupChannels workspace shadow exclusion", () => {
     await setupChannels(
       {} as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note: vi.fn(async () => undefined),
         select,
-      } as never,
+      }),
       {
         deferStatusUntilSelection: true,
         quickstartDefaults: true,
@@ -378,6 +398,204 @@ describe("setupChannels workspace shadow exclusion", () => {
     expect(prompt.searchable).toBe(true);
   });
 
+  it("does not mark a channel selected when setup returns unchanged config", async () => {
+    const cfg = {} as OpenClawConfig;
+    const configure = vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({
+      cfg,
+      accountId: "default",
+    }));
+    const plugin = makeSetupPlugin({
+      id: "signal",
+      label: "Signal",
+      setupWizard: {
+        channel: "signal",
+        getStatus: vi.fn(async () => ({
+          channel: "signal",
+          configured: false,
+          statusLines: [],
+        })),
+        configure,
+      } as ChannelSetupPlugin["setupWizard"],
+    });
+    listActiveChannelSetupPlugins.mockReturnValue([plugin]);
+    resolveChannelSetupEntries.mockReturnValue(
+      makeChannelSetupEntries({
+        entries: [
+          {
+            id: "signal",
+            meta: makeMeta("signal", "Signal"),
+          },
+        ],
+      }),
+    );
+    const select = vi.fn().mockResolvedValueOnce("signal").mockResolvedValueOnce("__done__");
+    const onSelection = vi.fn();
+    const onAccountId = vi.fn();
+
+    const result = await setupChannels(cfg, {} as never, makePrompter({ select }), {
+      skipConfirm: true,
+      skipDmPolicyPrompt: true,
+      onSelection,
+      onAccountId,
+    });
+
+    expect(result).toBe(cfg);
+    expect(configure).toHaveBeenCalled();
+    expect(onSelection).toHaveBeenCalledWith([]);
+    expect(onAccountId).not.toHaveBeenCalled();
+  });
+
+  it("honors explicit not-applied setup results for restored config clones", async () => {
+    const cfg = {
+      channels: {
+        signal: {
+          account: "+15555550123",
+        },
+      },
+    } as OpenClawConfig;
+    const configure = vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({
+      cfg: structuredClone(cfg),
+      accountId: "default",
+      setupApplied: false,
+    }));
+    const plugin = makeSetupPlugin({
+      id: "signal",
+      label: "Signal",
+      setupWizard: {
+        channel: "signal",
+        getStatus: vi.fn(async () => ({
+          channel: "signal",
+          configured: false,
+          statusLines: [],
+        })),
+        configure,
+      } as ChannelSetupPlugin["setupWizard"],
+    });
+    listActiveChannelSetupPlugins.mockReturnValue([plugin]);
+    resolveChannelSetupEntries.mockReturnValue(
+      makeChannelSetupEntries({
+        entries: [
+          {
+            id: "signal",
+            meta: makeMeta("signal", "Signal"),
+          },
+        ],
+      }),
+    );
+    const select = vi.fn().mockResolvedValueOnce("signal").mockResolvedValueOnce("__done__");
+    const onSelection = vi.fn();
+    const onAccountId = vi.fn();
+
+    const result = await setupChannels(cfg, {} as never, makePrompter({ select }), {
+      skipConfirm: true,
+      skipDmPolicyPrompt: true,
+      onSelection,
+      onAccountId,
+    });
+
+    expect(result).toEqual(cfg);
+    expect(result).toBe(cfg);
+    expect(configure).toHaveBeenCalled();
+    expect(onSelection).toHaveBeenCalledWith([]);
+    expect(onAccountId).not.toHaveBeenCalled();
+  });
+
+  it("rolls back selection-time config mutations when setup is not applied", async () => {
+    const cfg = {} as OpenClawConfig;
+    const configure = vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({
+      cfg,
+      accountId: "default",
+      setupApplied: false,
+    }));
+    const plugin = makeSetupPlugin({
+      id: "external-chat",
+      label: "External Chat",
+      setupWizard: {
+        channel: "external-chat",
+        getStatus: vi.fn(async () => ({
+          channel: "external-chat",
+          configured: false,
+          statusLines: [],
+        })),
+        configure,
+      } as ChannelSetupPlugin["setupWizard"],
+    });
+    const installableCatalogEntry = {
+      id: "external-chat",
+      pluginId: "@vendor/external-chat-plugin",
+      meta: makeMeta("external-chat", "External Chat"),
+      install: { npmSpec: "@vendor/external-chat-plugin" },
+    };
+    resolveChannelSetupEntries.mockReturnValue(
+      makeChannelSetupEntries({
+        entries: [
+          {
+            id: "external-chat",
+            meta: makeMeta("external-chat", "External Chat"),
+          },
+        ],
+        installableCatalogEntries: [installableCatalogEntry],
+        installableCatalogById: new Map([["external-chat", installableCatalogEntry]]),
+      }),
+    );
+    ensureChannelSetupPluginInstalled.mockResolvedValueOnce({
+      cfg: {
+        plugins: {
+          entries: {
+            "external-chat": {
+              enabled: true,
+            },
+          },
+        },
+        channels: {
+          "external-chat": {
+            enabled: true,
+          },
+        },
+      } as OpenClawConfig,
+      installed: true,
+      pluginId: "@vendor/external-chat-plugin",
+      status: "installed",
+    });
+    loadChannelSetupPluginRegistrySnapshotForChannel.mockReturnValue(
+      makePluginRegistry({
+        channelSetups: [
+          {
+            pluginId: "@vendor/external-chat-plugin",
+            source: "global",
+            enabled: true,
+            plugin,
+          },
+        ],
+      }),
+    );
+    const select = vi.fn().mockResolvedValueOnce("external-chat").mockResolvedValueOnce("__done__");
+    const onSelection = vi.fn();
+    const onAccountId = vi.fn();
+
+    const result = await setupChannels(cfg, {} as never, makePrompter({ select }), {
+      skipConfirm: true,
+      skipDmPolicyPrompt: true,
+      onSelection,
+      onAccountId,
+    });
+
+    expect(result).toBe(cfg);
+    expect(configure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cfg: expect.objectContaining({
+          channels: {
+            "external-chat": {
+              enabled: true,
+            },
+          },
+        }),
+      }),
+    );
+    expect(onSelection).toHaveBeenCalledWith([]);
+    expect(onAccountId).not.toHaveBeenCalled();
+  });
+
   it("keeps already-active setup plugins in the deferred picker without registry fallback", async () => {
     const activePlugin = {
       ...makeSetupPlugin({ id: "custom-chat", label: "Custom Chat" }),
@@ -395,11 +613,11 @@ describe("setupChannels workspace shadow exclusion", () => {
     await setupChannels(
       {} as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note: vi.fn(async () => undefined),
         select,
-      } as never,
+      }),
       {
         deferStatusUntilSelection: true,
         skipConfirm: true,
@@ -455,11 +673,11 @@ describe("setupChannels workspace shadow exclusion", () => {
     const next = await setupChannels(
       {} as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note: vi.fn(async () => undefined),
         select,
-      } as never,
+      }),
       {
         deferStatusUntilSelection: true,
         skipConfirm: true,
@@ -533,11 +751,11 @@ describe("setupChannels workspace shadow exclusion", () => {
         },
       } as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note: vi.fn(async () => undefined),
         select,
-      } as never,
+      }),
       {
         deferStatusUntilSelection: true,
         skipConfirm: true,
@@ -602,11 +820,11 @@ describe("setupChannels workspace shadow exclusion", () => {
     const next = await setupChannels(
       {} as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note: vi.fn(async () => undefined),
         select,
-      } as never,
+      }),
       {
         deferStatusUntilSelection: true,
         skipConfirm: true,
@@ -710,11 +928,11 @@ describe("setupChannels workspace shadow exclusion", () => {
     await setupChannels(
       {} as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note: vi.fn(async () => undefined),
         select,
-      } as never,
+      }),
       {
         quickstartDefaults: true,
         skipConfirm: true,
@@ -749,11 +967,11 @@ describe("setupChannels workspace shadow exclusion", () => {
     const next = await setupChannels(
       cfg as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note,
         select,
-      } as never,
+      }),
       {
         deferStatusUntilSelection: true,
         skipConfirm: true,
@@ -788,11 +1006,11 @@ describe("setupChannels workspace shadow exclusion", () => {
     await setupChannels(
       cfg as never,
       {} as never,
-      {
+      makePrompter({
         confirm: vi.fn(async () => true),
         note,
         select,
-      } as never,
+      }),
       {
         deferStatusUntilSelection: true,
         skipConfirm: true,
@@ -874,11 +1092,11 @@ describe("setupChannels workspace shadow exclusion", () => {
       await setupChannels(
         {} as never,
         {} as never,
-        {
+        makePrompter({
           confirm: vi.fn(async () => true),
           note,
           select,
-        } as never,
+        }),
         {
           deferStatusUntilSelection: true,
           skipConfirm: true,
@@ -930,11 +1148,11 @@ describe("setupChannels workspace shadow exclusion", () => {
       await setupChannels(
         {} as never,
         {} as never,
-        {
+        makePrompter({
           confirm: vi.fn(async () => true),
           note,
           select,
-        } as never,
+        }),
         {
           quickstartDefaults: true,
           skipConfirm: true,
@@ -1029,11 +1247,11 @@ describe("setupChannels workspace shadow exclusion", () => {
       await setupChannels(
         {} as never,
         {} as never,
-        {
+        makePrompter({
           confirm: vi.fn(async () => true),
           note,
           select,
-        } as never,
+        }),
         {
           deferStatusUntilSelection: true,
           skipConfirm: true,
@@ -1095,11 +1313,11 @@ describe("setupChannels workspace shadow exclusion", () => {
       await setupChannels(
         {} as never,
         {} as never,
-        {
+        makePrompter({
           confirm: vi.fn(async () => true),
           note,
           select,
-        } as never,
+        }),
         {
           quickstartDefaults: true,
           skipConfirm: true,
@@ -1166,11 +1384,11 @@ describe("setupChannels workspace shadow exclusion", () => {
       await setupChannels(
         cfg as never,
         {} as never,
-        {
+        makePrompter({
           confirm: vi.fn(async () => true),
           note,
           select,
-        } as never,
+        }),
         {
           skipConfirm: true,
           skipDmPolicyPrompt: true,
@@ -1231,11 +1449,11 @@ describe("setupChannels workspace shadow exclusion", () => {
       await setupChannels(
         cfg as never,
         {} as never,
-        {
+        makePrompter({
           confirm: vi.fn(async () => true),
           note,
           select,
-        } as never,
+        }),
         {
           skipConfirm: true,
           skipDmPolicyPrompt: true,

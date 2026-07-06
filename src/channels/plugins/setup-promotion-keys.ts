@@ -15,6 +15,7 @@ const COMMON_SINGLE_ACCOUNT_PROMOTION_KEYS = [
   "httpUrl",
   "httpHost",
   "httpPort",
+  "apiMode",
   "webhookPath",
   "webhookUrl",
   "webhookSecret",

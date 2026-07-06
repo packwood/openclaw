@@ -21,7 +21,7 @@ vi.mock("openclaw/plugin-sdk/media-runtime", async () => {
   };
 });
 
-const { sendMessageSignal } = await import("./send.js");
+const { sendMessageSignal, sendReadReceiptSignal, sendTypingSignal } = await import("./send.js");
 
 const SIGNAL_TEST_CFG = {
   channels: {
@@ -196,6 +196,173 @@ describe("sendMessageSignal receipts", () => {
       "send",
       expect.objectContaining({ message: text }),
       expect.any(Object),
+    );
+  });
+
+  it("uses the channel apiMode fallback for override typing sends", async () => {
+    signalRpcRequestMock.mockResolvedValueOnce({});
+
+    await expect(
+      sendTypingSignal("+15551234567", {
+        cfg: {
+          channels: {
+            signal: {
+              apiMode: "container",
+            },
+          },
+        },
+        baseUrl: "http://signal.test",
+        account: "+15550001111",
+      }),
+    ).resolves.toBe(true);
+
+    expect(signalRpcRequestMock).toHaveBeenCalledWith(
+      "sendTyping",
+      expect.objectContaining({ account: "+15550001111" }),
+      expect.objectContaining({ apiMode: "container" }),
+    );
+  });
+
+  it("uses the channel apiMode fallback for override message sends", async () => {
+    signalRpcRequestMock.mockResolvedValueOnce({ timestamp: 1234567894 });
+
+    await sendMessageSignal("+15551234567", "hello", {
+      cfg: {
+        channels: {
+          signal: {
+            apiMode: "container",
+          },
+        },
+      },
+      baseUrl: "http://signal.test",
+      account: "+15550001111",
+    });
+
+    expect(signalRpcRequestMock).toHaveBeenCalledWith(
+      "send",
+      expect.objectContaining({ account: "+15550001111" }),
+      expect.objectContaining({ apiMode: "container" }),
+    );
+  });
+
+  it("uses the channel apiMode fallback for override read receipts", async () => {
+    signalRpcRequestMock.mockResolvedValueOnce({});
+
+    await expect(
+      sendReadReceiptSignal("+15551234567", 1234567890, {
+        cfg: {
+          channels: {
+            signal: {
+              apiMode: "container",
+            },
+          },
+        },
+        baseUrl: "http://signal.test",
+        account: "+15550001111",
+      }),
+    ).resolves.toBe(true);
+
+    expect(signalRpcRequestMock).toHaveBeenCalledWith(
+      "sendReceipt",
+      expect.objectContaining({
+        account: "+15550001111",
+        targetTimestamp: 1234567890,
+      }),
+      expect.objectContaining({ apiMode: "container" }),
+    );
+  });
+
+  it("uses account apiMode for override message sends with account ids", async () => {
+    signalRpcRequestMock.mockResolvedValueOnce({ timestamp: 1234567895 });
+
+    await sendMessageSignal("+15551234567", "hello", {
+      cfg: {
+        channels: {
+          signal: {
+            apiMode: "native",
+            accounts: {
+              work: {
+                account: "+15550001111",
+                apiMode: "container",
+              },
+            },
+          },
+        },
+      },
+      accountId: "work",
+      baseUrl: "http://signal.test",
+      account: "+15550001111",
+    });
+
+    expect(signalRpcRequestMock).toHaveBeenCalledWith(
+      "send",
+      expect.objectContaining({ account: "+15550001111" }),
+      expect.objectContaining({ apiMode: "container" }),
+    );
+  });
+
+  it("uses account apiMode for override typing sends with account ids", async () => {
+    signalRpcRequestMock.mockResolvedValueOnce({});
+
+    await expect(
+      sendTypingSignal("+15551234567", {
+        cfg: {
+          channels: {
+            signal: {
+              apiMode: "native",
+              accounts: {
+                work: {
+                  account: "+15550001111",
+                  apiMode: "container",
+                },
+              },
+            },
+          },
+        },
+        accountId: "work",
+        baseUrl: "http://signal.test",
+        account: "+15550001111",
+      }),
+    ).resolves.toBe(true);
+
+    expect(signalRpcRequestMock).toHaveBeenCalledWith(
+      "sendTyping",
+      expect.objectContaining({ account: "+15550001111" }),
+      expect.objectContaining({ apiMode: "container" }),
+    );
+  });
+
+  it("uses account apiMode for override read receipts with account ids", async () => {
+    signalRpcRequestMock.mockResolvedValueOnce({});
+
+    await expect(
+      sendReadReceiptSignal("+15551234567", 1234567890, {
+        cfg: {
+          channels: {
+            signal: {
+              apiMode: "native",
+              accounts: {
+                work: {
+                  account: "+15550001111",
+                  apiMode: "container",
+                },
+              },
+            },
+          },
+        },
+        accountId: "work",
+        baseUrl: "http://signal.test",
+        account: "+15550001111",
+      }),
+    ).resolves.toBe(true);
+
+    expect(signalRpcRequestMock).toHaveBeenCalledWith(
+      "sendReceipt",
+      expect.objectContaining({
+        account: "+15550001111",
+        targetTimestamp: 1234567890,
+      }),
+      expect.objectContaining({ apiMode: "container" }),
     );
   });
 });

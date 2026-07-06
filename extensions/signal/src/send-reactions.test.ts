@@ -102,6 +102,26 @@ describe("sendReactionSignal", () => {
     expect(params.targetAuthor).toBe("123e4567-e89b-12d3-a456-426614174000");
   });
 
+  it("uses the channel apiMode fallback for override reactions", async () => {
+    await sendReactionSignal("+15551230000", 123, "✅", {
+      cfg: {
+        channels: {
+          signal: {
+            apiMode: "container",
+          },
+        },
+      },
+      baseUrl: "http://signal.test",
+      account: "+15550001111",
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith(
+      "sendReaction",
+      expect.objectContaining({ account: "+15550001111" }),
+      expect.objectContaining({ apiMode: "container" }),
+    );
+  });
+
   it("defaults targetAuthor to recipient for removals", async () => {
     await removeReactionSignal("+15551230000", 456, "❌", { cfg: SIGNAL_TEST_CFG });
 
