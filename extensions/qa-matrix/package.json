@@ -8,7 +8,6 @@
     "undici": "8.5.0"
   },
   "devDependencies": {
-    "@openclaw/crabline": "0.1.9",
     "@openclaw/matrix": "workspace:*",
     "@openclaw/plugin-sdk": "workspace:*",
     "openclaw": "workspace:*"

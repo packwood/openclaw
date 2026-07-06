@@ -14,7 +14,7 @@ type MatrixQaCrablineServer = {
   manifest: MatrixQaCrablineManifest;
 };
 
-type MatrixQaStartCrablineServer = (params: {
+export type MatrixQaStartCrablineServer = (params: {
   accessToken: string;
   adminToken: string;
   botUserId: string;
