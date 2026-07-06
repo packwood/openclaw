@@ -79,6 +79,9 @@ fun ChatSheetContent(viewModel: MainViewModel) {
   val sessionKey by viewModel.chatSessionKey.collectAsState()
   val mainSessionKey by viewModel.mainSessionKey.collectAsState()
   val thinkingLevel by viewModel.chatThinkingLevel.collectAsState()
+  val selectedModelRef by viewModel.chatSelectedModelRef.collectAsState()
+  val modelCatalog by viewModel.modelCatalog.collectAsState()
+  val thinkingSupported = thinkingSupportedForSelection(selectedModelRef, modelCatalog)
   val streamingAssistantText by viewModel.chatStreamingAssistantText.collectAsState()
   val pendingToolCalls by viewModel.chatPendingToolCalls.collectAsState()
   val sessions by viewModel.chatSessions.collectAsState()
@@ -181,6 +184,7 @@ fun ChatSheetContent(viewModel: MainViewModel) {
         draftText = chatDraft,
         healthOk = healthOk,
         thinkingLevel = thinkingLevel,
+        thinkingSupported = thinkingSupported,
         pendingRunCount = pendingRunCount,
         commands = chatCommands,
         attachments = attachments,

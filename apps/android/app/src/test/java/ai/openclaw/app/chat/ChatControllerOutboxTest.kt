@@ -1,5 +1,6 @@
 package ai.openclaw.app.chat
 
+import ai.openclaw.app.GatewayModelSummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -154,6 +155,7 @@ class ChatControllerOutboxTest {
     scope: CoroutineScope,
     gateway: FakeGateway,
     outbox: ChatCommandOutbox,
+    modelCatalog: () -> List<GatewayModelSummary> = { emptyList() },
   ): ChatController =
     ChatController(
       scope = scope,
@@ -161,6 +163,7 @@ class ChatControllerOutboxTest {
       requestGateway = gateway::request,
       cacheScope = { ChatCacheScope(gatewayId = "gateway-test", connectionGeneration = 1L) },
       commandOutbox = outbox,
+      modelCatalog = modelCatalog,
     )
 
   @Test
@@ -232,6 +235,64 @@ class ChatControllerOutboxTest {
       assertEquals(queuedIds, gateway.sentIdempotencyKeys)
       assertEquals(listOf("main", "main", "main"), gateway.sentSessionKeys)
       assertEquals(listOf("high", "off", "off"), gateway.sentThinkingLevels)
+      assertTrue(chat.outboxItems.value.isEmpty())
+    }
+
+  @Test
+  fun reconnectGatesActiveSessionThinkingAndFailsOpenForOtherSessions() =
+    runTest {
+      val gateway = FakeGateway()
+      val outbox = FakeCommandOutbox()
+      val now = System.currentTimeMillis()
+      outbox.seed(
+        ChatOutboxItem(
+          id = "active",
+          sessionKey = "main",
+          text = "active session",
+          thinkingLevel = "high",
+          createdAtMs = now,
+          status = ChatOutboxStatus.Queued,
+          retryCount = 0,
+          lastError = null,
+        ),
+      )
+      outbox.seed(
+        ChatOutboxItem(
+          id = "other",
+          sessionKey = "other-session",
+          text = "unknown session",
+          thinkingLevel = "medium",
+          createdAtMs = now + 1,
+          status = ChatOutboxStatus.Queued,
+          retryCount = 0,
+          lastError = null,
+        ),
+      )
+      val catalog =
+        listOf(
+          GatewayModelSummary(
+            id = "plain",
+            name = "Plain",
+            provider = "openai",
+            available = true,
+            supportsVision = false,
+            supportsAudio = false,
+            supportsDocuments = false,
+            supportsReasoning = false,
+            contextTokens = null,
+          ),
+        )
+      val chat = controller(this, gateway, outbox, modelCatalog = { catalog })
+      advanceUntilIdle()
+      assertEquals(listOf("high", "medium"), chat.outboxItems.value.map { it.thinkingLevel })
+
+      gateway.online = true
+      assertTrue(chat.setSessionModelAwait("main", "openai/plain"))
+      chat.handleGatewayEvent("health", null)
+      advanceUntilIdle()
+
+      assertEquals(listOf("active session", "unknown session"), gateway.sentMessages)
+      assertEquals(listOf("off", "medium"), gateway.sentThinkingLevels)
       assertTrue(chat.outboxItems.value.isEmpty())
     }
 

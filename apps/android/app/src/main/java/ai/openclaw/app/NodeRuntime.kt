@@ -942,6 +942,7 @@ class NodeRuntime private constructor(
       cacheScope = ::chatCacheScope,
       commandOutbox = chatCommandOutbox,
       recordModelRecent = prefs::recordModelRecent,
+      modelCatalog = { _modelCatalog.value },
     ).also {
       it.applyMainSessionKey(_mainSessionKey.value)
     }

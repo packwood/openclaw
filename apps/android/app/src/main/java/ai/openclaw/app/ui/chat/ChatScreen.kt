@@ -133,6 +133,7 @@ fun ChatScreen(
   val modelFavorites by viewModel.modelFavorites.collectAsState()
   val modelRecents by viewModel.modelRecents.collectAsState()
   val selectedModelRef by viewModel.chatSelectedModelRef.collectAsState()
+  val thinkingSupported = thinkingSupportedForSelection(selectedModelRef, modelCatalog)
   val contextUsage = resolveChatContextUsage(sessionKey = sessionKey, mainSessionKey = mainSessionKey, sessions = sessions)
   val gatewayAddress = gatewayDiagnosticsEndpoint(remoteAddress = remoteAddress, manualHost = manualHost, manualPort = manualPort, manualTls = manualTls)
   val gatewayProblemMessage = gatewayConnectionDisplay.problem?.message?.takeIf { it.isNotBlank() }
@@ -301,6 +302,7 @@ fun ChatScreen(
       onValueChange = { input = it },
       attachments = attachments,
       thinkingLevel = thinkingLevel,
+      thinkingSupported = thinkingSupported,
       contextUsage = contextUsage,
       selectedModelLabel = selectedModelLabel,
       modelPickerEnabled = gatewayConnectionDisplay.isConnected,
@@ -954,6 +956,7 @@ private fun ChatComposer(
   onValueChange: (String) -> Unit,
   attachments: List<PendingImageAttachment>,
   thinkingLevel: String,
+  thinkingSupported: Boolean,
   contextUsage: ChatContextUsage,
   selectedModelLabel: String,
   modelPickerEnabled: Boolean,
@@ -995,6 +998,7 @@ private fun ChatComposer(
       )
       ChatContextMeter(
         thinkingLevel = thinkingLevel,
+        thinkingSupported = thinkingSupported,
         contextUsage = contextUsage,
         onClick = { onThinkingLevelChange(nextThinkingValue(thinkingLevel)) },
       )
@@ -1281,6 +1285,7 @@ private fun ChatOfflineNotice(
 @Composable
 private fun ChatContextMeter(
   thinkingLevel: String,
+  thinkingSupported: Boolean,
   contextUsage: ChatContextUsage,
   onClick: () -> Unit,
 ) {
@@ -1292,6 +1297,7 @@ private fun ChatContextMeter(
   ) {
     Surface(
       onClick = onClick,
+      enabled = thinkingSupported,
       modifier = Modifier.heightIn(min = ClawTheme.spacing.touchTarget),
       shape = RoundedCornerShape(ClawTheme.radii.pill),
       color = ClawTheme.colors.canvas,
@@ -1302,9 +1308,11 @@ private fun ChatContextMeter(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
-        Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(13.dp), tint = ClawTheme.colors.textSubtle)
+        if (thinkingSupported) {
+          Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(13.dp), tint = ClawTheme.colors.textSubtle)
+        }
         Text(
-          text = contextMeterLabel(contextUsage, thinkingLevel),
+          text = contextMeterLabel(contextUsage, thinkingLevel, thinkingSupported),
           style = ClawTheme.type.caption.copy(fontSize = 12.5.sp, lineHeight = 16.sp),
           color = ClawTheme.colors.textMuted,
           maxLines = 1,
@@ -1534,9 +1542,10 @@ internal fun contextMeterWidth(usage: ChatContextUsage): Float? {
 internal fun contextMeterLabel(
   usage: ChatContextUsage,
   thinkingLevel: String,
+  thinkingSupported: Boolean = true,
 ): String {
   val contextLabel = contextMeterWidth(usage)?.let { "Context ${(it * 100).roundToInt()}%" } ?: "Context --"
-  return "$contextLabel · ${contextMeterThinkingLabel(thinkingLevel)}"
+  return if (thinkingSupported) "$contextLabel · ${contextMeterThinkingLabel(thinkingLevel)}" else contextLabel
 }
 
 internal fun contextMeterThinkingLabel(value: String): String =

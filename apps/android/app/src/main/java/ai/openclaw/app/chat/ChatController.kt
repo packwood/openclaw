@@ -1,13 +1,15 @@
 package ai.openclaw.app.chat
 
+import ai.openclaw.app.GatewayModelSummary
 import ai.openclaw.app.gateway.GatewayRequestDefinitiveFailure
 import ai.openclaw.app.gateway.GatewayRequestOutcomeUnknown
 import ai.openclaw.app.gateway.GatewaySession
 import ai.openclaw.app.gateway.parseChatSendAck
 import ai.openclaw.app.resolveAgentIdFromMainSessionKey
+import ai.openclaw.app.ui.chat.thinkingSupportedForSelection
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +44,7 @@ class ChatController internal constructor(
   private val cacheScope: () -> ChatCacheScope? = { null },
   private val commandOutbox: ChatCommandOutbox? = null,
   private val recordModelRecent: (String) -> Unit = {},
+  private val modelCatalog: () -> List<GatewayModelSummary> = { emptyList() },
 ) {
   internal constructor(
     scope: CoroutineScope,
@@ -51,6 +54,7 @@ class ChatController internal constructor(
     cacheScope: () -> ChatCacheScope? = { null },
     commandOutbox: ChatCommandOutbox? = null,
     recordModelRecent: (String) -> Unit = {},
+    modelCatalog: () -> List<GatewayModelSummary> = { emptyList() },
   ) : this(
     scope = scope,
     json = json,
@@ -59,6 +63,7 @@ class ChatController internal constructor(
     cacheScope = cacheScope,
     commandOutbox = commandOutbox,
     recordModelRecent = recordModelRecent,
+    modelCatalog = modelCatalog,
   )
 
   private var appliedMainSessionKey = "main"
@@ -568,7 +573,13 @@ class ChatController internal constructor(
     val runId = UUID.randomUUID().toString()
     val text = if (trimmed.isEmpty() && attachments.isNotEmpty()) "See attached." else trimmed
     val sessionKey = _sessionKey.value
-    val thinking = normalizeThinking(thinkingLevel)
+    // agent-command.ts throws for explicit unsupported levels, so hidden controls must send off.
+    val thinking =
+      if (thinkingSupportedForSelection(_selectedModelRef.value, modelCatalog())) {
+        normalizeThinking(thinkingLevel)
+      } else {
+        "off"
+      }
 
     // Optimistic user message keeps the composer responsive while chat.send and history refresh complete.
     val userContent =
@@ -1339,14 +1350,25 @@ class ChatController internal constructor(
 
   private suspend fun attemptOutboxSend(item: ChatOutboxItem): OutboxSendResult =
     try {
+      val queuedSessionKey = normalizeRequestedSessionKey(item.sessionKey)
+      // Android only knows the active session's selected model. Unknown queued sessions fail
+      // open, preserving the thinking level captured when they were enqueued.
+      val thinking =
+        if (
+          queuedSessionKey == _sessionKey.value &&
+          !thinkingSupportedForSelection(_selectedModelRef.value, modelCatalog())
+        ) {
+          "off"
+        } else {
+          item.thinkingLevel
+        }
       val params =
         buildJsonObject {
           // Rows enqueued under the pre-hello "main" alias must flush to the canonical main
           // session the gateway announced, matching how the UI attributes those rows.
-          put("sessionKey", JsonPrimitive(normalizeRequestedSessionKey(item.sessionKey)))
+          put("sessionKey", JsonPrimitive(queuedSessionKey))
           put("message", JsonPrimitive(item.text))
-          // Enqueue-time thinking level: a later selector change must not alter queued sends.
-          put("thinking", JsonPrimitive(item.thinkingLevel))
+          put("thinking", JsonPrimitive(thinking))
           put("timeoutMs", JsonPrimitive(30_000))
           // The row id is the idempotency key, so gateway-side dedupe makes redelivery of an
           // acked-but-crashed item harmless.
