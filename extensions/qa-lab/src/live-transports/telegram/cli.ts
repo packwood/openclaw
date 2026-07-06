@@ -24,7 +24,7 @@ export const telegramQaAdapterFactory: NonNullable<
   LiveTransportQaCliRegistration["adapterFactory"]
 > = {
   id: "telegram",
-  scenarioIds: ["channel-chat-baseline"],
+  scenarioIds: ["channel-canary", "channel-mention-gating"],
   matches: ({ channelId, driver }) => driver === "live" && channelId === "telegram",
   async create(context) {
     return await (await loadTelegramQaAdapterRuntime()).createTelegramQaTransportAdapter(context);

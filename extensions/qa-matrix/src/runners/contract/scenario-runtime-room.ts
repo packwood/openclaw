@@ -35,7 +35,6 @@ import {
   isMatrixQaExactMarkerReply,
   isMatrixQaMessageLikeKind,
   MATRIX_QA_TOOL_PROGRESS_TASK_FILENAME,
-  primeMatrixQaActorCursor,
   primeMatrixQaDriverScenarioClient,
   resolveMatrixQaNoReplyWindowMs,
   runAssertedDriverTopLevelScenario,
@@ -390,25 +389,6 @@ export async function runSubagentThreadSpawnScenario(context: MatrixQaScenarioCo
   } satisfies MatrixQaScenarioExecution;
 }
 
-export async function runTopLevelReplyShapeScenario(context: MatrixQaScenarioContext) {
-  const result = await runAssertedDriverTopLevelScenario({
-    context,
-    label: "top-level reply",
-    tokenPrefix: "MATRIX_QA_TOPLEVEL",
-  });
-  return {
-    artifacts: {
-      driverEventId: result.driverEventId,
-      reply: result.reply,
-      token: result.token,
-    },
-    details: [
-      `driver event: ${result.driverEventId}`,
-      ...buildMatrixReplyDetails("reply", result.reply),
-    ].join("\n"),
-  } satisfies MatrixQaScenarioExecution;
-}
-
 export async function runRoomThreadReplyOverrideScenario(context: MatrixQaScenarioContext) {
   const result = await runConfigurableTopLevelScenario({
     accessToken: context.driverAccessToken,
@@ -438,58 +418,6 @@ export async function runRoomThreadReplyOverrideScenario(context: MatrixQaScenar
     details: [
       `driver event: ${result.driverEventId}`,
       ...buildMatrixReplyDetails("reply", result.reply),
-    ].join("\n"),
-  } satisfies MatrixQaScenarioExecution;
-}
-
-export async function runObserverAllowlistOverrideScenario(context: MatrixQaScenarioContext) {
-  const { client, startSince } = await primeMatrixQaActorCursor({
-    accessToken: context.observerAccessToken,
-    actorId: "observer",
-    baseUrl: context.baseUrl,
-    observedEvents: context.observedEvents,
-    syncState: context.syncState,
-    syncStreams: context.syncStreams,
-  });
-  const token = buildMatrixQaToken("MATRIX_QA_OBSERVER_ALLOWLIST");
-  const body = buildMentionPrompt(context.sutUserId, token);
-  const driverEventId = await client.sendTextMessage({
-    body,
-    mentionUserIds: [context.sutUserId],
-    roomId: context.roomId,
-  });
-  const matched = await client.waitForRoomEvent({
-    observedEvents: context.observedEvents,
-    predicate: (event) =>
-      isMatrixQaExactMarkerReply(event, {
-        roomId: context.roomId,
-        sutUserId: context.sutUserId,
-        token,
-      }) && event.relatesTo === undefined,
-    roomId: context.roomId,
-    since: startSince,
-    timeoutMs: context.timeoutMs,
-  });
-  advanceMatrixQaActorCursor({
-    actorId: "observer",
-    syncState: context.syncState,
-    nextSince: matched.since,
-    startSince,
-  });
-  const reply = buildMatrixReplyArtifact(matched.event, token);
-  assertTopLevelReplyArtifact("observer allowlist reply", reply);
-  return {
-    artifacts: {
-      actorUserId: context.observerUserId,
-      driverEventId,
-      reply,
-      token,
-      triggerBody: body,
-    },
-    details: [
-      `trigger sender: ${context.observerUserId}`,
-      `driver event: ${driverEventId}`,
-      ...buildMatrixReplyDetails("reply", reply),
     ].join("\n"),
   } satisfies MatrixQaScenarioExecution;
 }

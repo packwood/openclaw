@@ -24,7 +24,12 @@ export const whatsappQaAdapterFactory: NonNullable<
   LiveTransportQaCliRegistration["adapterFactory"]
 > = {
   id: "whatsapp",
-  scenarioIds: ["dm-chat-baseline"],
+  scenarioIds: [
+    "channel-canary",
+    "channel-dm-group-routing",
+    "channel-mention-gating",
+    "channel-top-level-reply-shape",
+  ],
   matches: ({ channelId, driver }) => driver === "live" && channelId === "whatsapp",
   async create(context) {
     return await (await loadWhatsAppQaAdapterRuntime()).createWhatsAppQaTransportAdapter(context);
